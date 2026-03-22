@@ -181,4 +181,97 @@ program
     saveConfig(config)
   })
 
+program
+  .command('status')
+  .description('Show vault and API status')
+  .action(async () => {
+    const config = getConfig()
+    const store = await createStore()
+    const accounts = store.listAccounts()
+    const auditLog = store.getAuditLog(5)
+    store.close()
+
+    console.log(`Vault: ~/.sesame/vault.db`)
+    console.log(`Accounts: ${accounts.length}`)
+    console.log(`API port: ${config.port}`)
+    console.log(`API token: ${config.apiTokenHash ? 'configured' : 'none'}`)
+
+    // Check if API server is running
+    try {
+      const resp = await fetch(`http://127.0.0.1:${config.port}/health`)
+      if (resp.ok) {
+        console.log(`API server: running`)
+      } else {
+        console.log(`API server: not running`)
+      }
+    } catch {
+      console.log(`API server: not running`)
+    }
+
+    if (auditLog.length > 0) {
+      console.log(`\nRecent access:`)
+      for (const entry of auditLog) {
+        console.log(`  ${entry.timestamp} | ${entry.account_name} | ${entry.requester}`)
+      }
+    }
+  })
+
+program
+  .command('export')
+  .description('Export vault (encrypted JSON)')
+  .option('-o, --output <path>', 'Output file path', 'sesame-export.json')
+  .action(async (opts: { output: string }) => {
+    const key = await getMasterKey()
+    const store = await createStore()
+    const accounts = store.listAccounts()
+
+    const exportData = accounts.map((a) => ({
+      name: a.name,
+      issuer: a.issuer,
+      encrypted_secret: a.encrypted_secret,
+      created_at: a.created_at,
+    }))
+
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(opts.output, JSON.stringify({ version: 1, accounts: exportData }, null, 2))
+    console.log(`Exported ${accounts.length} accounts to ${opts.output}`)
+    console.log('Note: secrets remain encrypted with your master password')
+    store.close()
+  })
+
+program
+  .command('import')
+  .description('Import vault from exported JSON')
+  .argument('<path>', 'Path to exported JSON file')
+  .action(async (filePath: string) => {
+    const { readFileSync, existsSync } = await import('node:fs')
+    if (!existsSync(filePath)) {
+      console.error(`Error: file not found: ${filePath}`)
+      process.exit(1)
+    }
+
+    const data = JSON.parse(readFileSync(filePath, 'utf8'))
+    if (!data.version || !Array.isArray(data.accounts)) {
+      console.error('Error: invalid export file')
+      process.exit(1)
+    }
+
+    const store = await createStore()
+    let imported = 0
+    let skipped = 0
+
+    for (const account of data.accounts) {
+      try {
+        store.importAccountRaw(account.name, account.issuer, account.encrypted_secret)
+        imported++
+      } catch {
+        skipped++
+      }
+    }
+
+    store.close()
+    console.log(`Imported ${imported} accounts (${skipped} skipped/duplicates)`)
+    console.log('Note: imported secrets must be from the same master password')
+  })
+
 program.parse()

@@ -1,12 +1,15 @@
-import { Tray, Menu, nativeImage, BrowserWindow } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron'
+import path from 'node:path'
 
 let tray: Tray | null = null
 
 export function createTray(mainWindow: BrowserWindow) {
-  // Create a simple 16x16 tray icon (key emoji as fallback)
-  const icon = nativeImage.createEmpty()
+  // Use template image for macOS (renders correctly in light/dark menu bar)
+  const iconPath = path.join(__dirname, '../../resources/icons/trayTemplate.png')
+  const icon = nativeImage.createFromPath(iconPath)
+  icon.setTemplateImage(true)
+
   tray = new Tray(icon)
-  tray.setTitle('🔐')
   tray.setToolTip('Sesame Authenticator')
 
   const contextMenu = Menu.buildFromTemplate([
@@ -15,22 +18,26 @@ export function createTray(mainWindow: BrowserWindow) {
       click: () => {
         mainWindow.show()
         mainWindow.focus()
-      }
+      },
     },
     { type: 'separator' },
     {
       label: 'Quit',
       click: () => {
-        mainWindow.destroy()
-      }
-    }
+        app.quit()
+      },
+    },
   ])
 
   tray.setContextMenu(contextMenu)
 
   tray.on('click', () => {
-    mainWindow.show()
-    mainWindow.focus()
+    if (mainWindow.isVisible()) {
+      mainWindow.focus()
+    } else {
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
 
   return tray

@@ -163,6 +163,14 @@ export class VaultStore {
     return results
   }
 
+  importAccountRaw(name: string, issuer: string, encryptedSecret: string) {
+    this.getDb().run(
+      'INSERT INTO accounts (name, issuer, encrypted_secret) VALUES (?, ?, ?)',
+      [name, issuer, encryptedSecret]
+    )
+    this.save()
+  }
+
   close() {
     if (this.db) {
       this.save()
