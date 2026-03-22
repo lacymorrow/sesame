@@ -1,6 +1,14 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": ["lib/main/index.d.ts", "electron.vite.config.*", "lib/**/*", "resources/**/*", "app/**/*"],
+  "include": [
+    "src/preload/index.d.ts",
+    "electron-vite.config.*",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/core/**/*",
+    "src/cli/**/*",
+    "lib/window/ipcEvents.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "moduleResolution": "bundler",

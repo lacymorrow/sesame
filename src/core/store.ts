@@ -1,8 +1,8 @@
-import Database from 'better-sqlite3'
+import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
-import { encrypt, decrypt, deriveKey, generateSalt } from './crypto'
+import { encrypt, decrypt, generateSalt } from './crypto'
 
 export interface StoredAccount {
   id: number
@@ -51,18 +51,25 @@ export function saveConfig(config: Config) {
 }
 
 export class VaultStore {
-  private db: Database.Database
+  private db: SqlJsDatabase | null = null
+  private dbPath: string
 
-  constructor() {
-    ensureDir()
-    this.db = new Database(DB_PATH)
-    this.db.pragma('journal_mode = WAL')
-    this.db.pragma('foreign_keys = ON')
-    this.init()
+  constructor(dbPath?: string) {
+    this.dbPath = dbPath ?? DB_PATH
   }
 
-  private init() {
-    this.db.exec(`
+  async init(): Promise<void> {
+    ensureDir()
+    const SQL = await initSqlJs()
+
+    if (fs.existsSync(this.dbPath)) {
+      const fileBuffer = fs.readFileSync(this.dbPath)
+      this.db = new SQL.Database(fileBuffer)
+    } else {
+      this.db = new SQL.Database()
+    }
+
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
@@ -77,28 +84,58 @@ export class VaultStore {
         timestamp TEXT NOT NULL DEFAULT (datetime('now'))
       );
     `)
+    this.save()
+  }
+
+  private getDb(): SqlJsDatabase {
+    if (!this.db) throw new Error('Store not initialized. Call init() first.')
+    return this.db
+  }
+
+  private save() {
+    const data = this.getDb().export()
+    const buffer = Buffer.from(data)
+    ensureDir()
+    fs.writeFileSync(this.dbPath, buffer)
   }
 
   addAccount(name: string, issuer: string, secret: string, key: Buffer) {
     const encryptedSecret = encrypt(secret, key)
-    this.db.prepare('INSERT INTO accounts (name, issuer, encrypted_secret) VALUES (?, ?, ?)').run(
-      name,
-      issuer,
-      encryptedSecret
+    this.getDb().run(
+      'INSERT INTO accounts (name, issuer, encrypted_secret) VALUES (?, ?, ?)',
+      [name, issuer, encryptedSecret]
     )
+    this.save()
   }
 
   getAccount(name: string): StoredAccount | undefined {
-    return this.db.prepare('SELECT * FROM accounts WHERE name = ?').get(name) as StoredAccount | undefined
+    const stmt = this.getDb().prepare('SELECT * FROM accounts WHERE name = ?')
+    stmt.bind([name])
+    if (stmt.step()) {
+      const row = stmt.getAsObject() as unknown as StoredAccount
+      stmt.free()
+      return row
+    }
+    stmt.free()
+    return undefined
   }
 
   listAccounts(): StoredAccount[] {
-    return this.db.prepare('SELECT * FROM accounts ORDER BY name').all() as StoredAccount[]
+    const results: StoredAccount[] = []
+    const stmt = this.getDb().prepare('SELECT * FROM accounts ORDER BY name')
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as unknown as StoredAccount)
+    }
+    stmt.free()
+    return results
   }
 
   removeAccount(name: string): boolean {
-    const result = this.db.prepare('DELETE FROM accounts WHERE name = ?').run(name)
-    return result.changes > 0
+    const exists = this.getAccount(name)
+    if (!exists) return false
+    this.getDb().run('DELETE FROM accounts WHERE name = ?', [name])
+    this.save()
+    return true
   }
 
   getDecryptedSecret(name: string, key: Buffer): string | null {
@@ -108,14 +145,29 @@ export class VaultStore {
   }
 
   logAccess(accountName: string, requester: string = 'gui') {
-    this.db.prepare('INSERT INTO audit_log (account_name, requester) VALUES (?, ?)').run(accountName, requester)
+    this.getDb().run(
+      'INSERT INTO audit_log (account_name, requester) VALUES (?, ?)',
+      [accountName, requester]
+    )
+    this.save()
   }
 
   getAuditLog(limit: number = 50): AuditEntry[] {
-    return this.db.prepare('SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?').all(limit) as AuditEntry[]
+    const results: AuditEntry[] = []
+    const stmt = this.getDb().prepare('SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?')
+    stmt.bind([limit])
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as unknown as AuditEntry)
+    }
+    stmt.free()
+    return results
   }
 
   close() {
-    this.db.close()
+    if (this.db) {
+      this.save()
+      this.db.close()
+      this.db = null
+    }
   }
 }

@@ -1,4 +1,4 @@
-import React from 'react'
+
 import ContentStep from '../ContentStep'
 import AsterikIcon from '../icons/AsterikIcon'
 

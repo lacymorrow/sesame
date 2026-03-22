@@ -8,16 +8,17 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          main: resolve(__dirname, 'lib/main/main.ts'),
+          main: resolve(__dirname, 'src/main/index.ts'),
         },
       },
     },
     resolve: {
-      alias: {
-        '@/app': resolve(__dirname, 'app'),
-        '@/lib': resolve(__dirname, 'lib'),
-        '@/resources': resolve(__dirname, 'resources'),
-      },
+      alias: [
+        { find: '@/lib', replacement: resolve(__dirname, 'lib') },
+        { find: '@/app', replacement: resolve(__dirname, 'app') },
+        { find: '@/resources', replacement: resolve(__dirname, 'resources') },
+        { find: '@', replacement: resolve(__dirname, 'src') },
+      ],
     },
     plugins: [externalizeDepsPlugin()],
   },
@@ -25,34 +26,34 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          preload: resolve(__dirname, 'lib/preload/preload.ts'),
+          preload: resolve(__dirname, 'src/preload/index.ts'),
         },
       },
     },
     resolve: {
-      alias: {
-        '@/app': resolve(__dirname, 'app'),
-        '@/lib': resolve(__dirname, 'lib'),
-        '@/resources': resolve(__dirname, 'resources'),
-      },
+      alias: [
+        { find: '@/lib', replacement: resolve(__dirname, 'lib') },
+        { find: '@', replacement: resolve(__dirname, 'src') },
+      ],
     },
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
-    root: './app',
+    root: resolve(__dirname, 'src/renderer'),
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'app/index.html'),
+          index: resolve(__dirname, 'src/renderer/index.html'),
         },
       },
     },
     resolve: {
-      alias: {
-        '@/app': resolve(__dirname, 'app'),
-        '@/lib': resolve(__dirname, 'lib'),
-        '@/resources': resolve(__dirname, 'resources'),
-      },
+      alias: [
+        { find: '@/lib', replacement: resolve(__dirname, 'lib') },
+        { find: '@/app', replacement: resolve(__dirname, 'app') },
+        { find: '@/resources', replacement: resolve(__dirname, 'resources') },
+        { find: '@', replacement: resolve(__dirname, 'src') },
+      ],
     },
     plugins: [tailwindcss(), react()],
   },

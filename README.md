@@ -1,212 +1,134 @@
-# Electron React App
+# Sesame
 
-<br />
-<p align="center">
-    <img src="resources/build/icon.svg" width="64" />
-</p>
+Agent-readable authenticator. Like Authy or Google Authenticator, but built for AI agents.
 
-A modern Electron application template with React, Vite, TypeScript, and TailwindCSS. This project provides a solid foundation for developing cross-platform desktop applications.
+## What is this?
 
-<br />
+Sesame stores your TOTP secrets and generates 2FA codes. You manage accounts through a desktop app. Your agents grab codes through a CLI or local API.
 
-<p align="center">
-    <img src="app/assets/era-preview.png" target="_blank" />
-</p>
+## Architecture
 
-<p align="center">
-    <a href="https://imgur.com/B5pGkDk">Watch Video Preview</a>
-</p>
+- **Desktop App** (Electron + React): Add accounts, scan QR codes, view live codes
+- **CLI** (`sesame get <account>`): Agents call this to grab codes
+- **Local API** (`GET http://127.0.0.1:7327/codes/:account`): REST endpoint for programmatic access
+- **Encrypted Storage**: AES-256-GCM, master password required to unlock
 
-<br />
+## Security
 
-## Features
+- All secrets encrypted at rest with AES-256-GCM
+- Key derived via PBKDF2 (100k iterations, SHA-512)
+- API binds to `127.0.0.1` only (never exposed to network)
+- Optional Bearer token for API authentication
+- Audit log tracks every code request (who asked, when)
+- Master password never stored, only used to derive the encryption key
+- Vault and config stored in `~/.sesame/` with restricted file permissions
 
-- 🚀 Electron - Cross-platform desktop application framework
-- ⚛️ React - Component-based UI library
-- 📦 TypeScript - Type-safe JavaScript
-- 🎨 Shadcn UI - Beautiful and accessible component library
-- 🎨 TailwindCSS - Utility-first CSS framework
-- ⚡ Vite - Lightning-fast build tool
-- 🔥 Fast HMR - Hot Module Replacement
-- 🎨 Dark/Light Mode - Built-in theme switching
-- 🪟 Custom Window & Titlebar - Professional-looking window with custom titlebar & file menus
-- 📐 Clean Project Structure - Separation of main and renderer processes
-- 🧩 Path Aliases – Keep your code organized
-- 🛠️ Electron Builder - Configured for packaging applications
-
-<br />
-
-## Prerequisites
-
-- Node.js (v18 or higher)
-- npm, yarn, pnpm, or bun
-
-<br />
-
-## Installation
-
-Clone the repository and install dependencies:
+## Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/guasam/electron-react-app
-cd electron-react-app
-
-# Install dependencies
-npm install
-# or
-yarn
-# or
+# From source
+git clone https://github.com/lacymorrow/sesame.git
+cd sesame
 pnpm install
-# or
-bun install
+pnpm cli:build
+
+# Link CLI globally
+pnpm link --global
 ```
 
-<br />
-
-## Development
-
-Start the development server:
+## CLI Usage
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun run dev
+# Add a new account
+sesame add github --secret JBSWY3DPEHPK3PXP --issuer GitHub
+
+# Add from otpauth:// URI
+sesame add gitlab --uri "otpauth://totp/GitLab:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitLab"
+
+# Get current code (interactive)
+sesame get github
+# 482931  (18s remaining)
+
+# Get code without remaining time (agent-friendly)
+sesame get github --raw
+# 482931
+
+# List accounts
+sesame list
+
+# Remove an account
+sesame remove github
+
+# Start API server
+sesame serve
+
+# Configure port and API token
+sesame config --port 7327 --token my-secret-token
 ```
 
-This will start Electron with hot-reload enabled so you can see changes in real time.
+## Non-Interactive Mode (for Agents)
 
-<br />
-
-## Building for Production
-
-Build the application for your platform:
+Set `SESAME_PASSWORD` to skip the master password prompt:
 
 ```bash
-# For Windows
-npm run build:win
+export SESAME_PASSWORD="your-master-password"
 
-# For macOS
-npm run build:mac
-
-# For Linux
-npm run build:linux
-
-# Unpacked for all platforms
-npm run build:unpack
+# Now agents can grab codes without interaction
+CODE=$(sesame get github --raw)
 ```
 
-Distribution files will be located in the `dist` directory.
+## API Usage
 
-<br />
+Start the server with `sesame serve`, then:
 
-## IPC Communication
+```bash
+# Health check
+curl http://127.0.0.1:7327/health
+# {"status":"ok","version":"0.1.0"}
 
-The app uses a secure IPC (Inter-Process Communication) system to communicate between the renderer and main processes:
+# Get code for an account
+curl http://127.0.0.1:7327/codes/github
+# {"code":"482931","remaining":18}
 
-```ts
-// Renderer process (send message to main)
-window.api.send('channel-name', ...args)
+# List all accounts
+curl http://127.0.0.1:7327/accounts
+# [{"name":"github","issuer":"GitHub","created_at":"..."}]
 
-// Renderer process (receive message from main)
-window.api.receive('channel-name', (data) => {
-  console.log(data)
-})
-
-// Renderer process (invoke a method in main and get a response)
-const result = await window.api.invoke('channel-name', ...args)
+# With bearer token (if configured)
+curl -H "Authorization: Bearer my-secret-token" http://127.0.0.1:7327/codes/github
 ```
 
-<br />
+## Desktop App
 
-## Custom Window Components
-
-This template includes a custom window implementation with:
-
-- Custom titlebar with app icon
-- Window control buttons (minimize, maximize, close)
-- Menu system with keyboard shortcuts
-- Dark/light mode toggle
-- Cross-platform support for Windows and macOS
-
-<br />
-
-### Titlebar Menu Toggle
-
-The titlebar menu can be toggled using:
-
-- **Windows**: Press the `Alt` key
-- **macOS**: Press the `Option (⌥)` key
-
-When you press the toggle key:
-
-- If the menu is hidden, it becomes visible
-- If the menu is already visible, it gets hidden
-- The menu only toggles if menu items are available
-
-<br />
-
-### Customizing Menu Items
-
-To add, remove or modify menu items, update the `lib/window/titlebarMenus.ts` file.
-
-<br />
-
-## Tailwind Styling
-
-The project supports **TailwindCSS** for styling:
-
-```ts
-// Example component with Tailwind classes
-const Button = () => (
-  <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-    Click me
-  </button>
-);
+```bash
+pnpm dev    # Development mode
+pnpm start  # Production preview
 ```
 
-<br />
+The desktop app provides:
+- Master password unlock screen
+- Live dashboard with countdown timers for all accounts
+- Click-to-copy TOTP codes
+- Add accounts manually or via otpauth:// URI
+- API server management (start/stop, port config)
+- System tray with quick access
 
-## Contributing
+## Tech Stack
 
-Contributions are welcome! Feel free to submit a Pull Request.
+- Electron 36 + React 19 + TypeScript
+- electron-vite for builds
+- shadcn/ui + Tailwind CSS v4
+- otplib for TOTP generation
+- sql.js for local storage (WASM SQLite, no native deps)
+- Fastify for local API server
+- Commander for CLI
 
-<br />
+## Data Storage
 
-## Project Structure
+All data lives in `~/.sesame/`:
+- `vault.db` - Encrypted account secrets (SQLite via sql.js)
+- `config.json` - Port, salt, API token hash
 
-<!-- prettier-ignore-start -->
-```markdown
-├── app/                        # Renderer process files
-│   ├── assets/                 # Static assets (images, fonts, etc)
-│   ├── components/             # React components
-│   │   ├── App.tsx             # Application component
-│   ├── styles/                 # CSS and Tailwind files
-│   │   ├── app.css             # App stylesheet
-│   │   └── tailwind.css        # Tailwind stylesheet
-│   ├── index.html              # Entry HTML file
-│   └── renderer.tsx            # Renderer process entry
-├── lib/                        # Shared library code
-│   ├── main/                   # Main process code
-│   │   ├── index.ts            # Main entry point for Electron
-│   │   └── ...                 # Other main process modules
-│   ├── preload/                # Preload scripts for IPC
-│   │   ├── index.ts            # Preload script entry
-│   │   └── api.ts              # Exposed API for renderer
-│   ├── welcome/                # Welcome kit components
-│   └── window/                 # Custom window implementation
-├── resources/                  # Build resources
-├── .eslintrc                   # ESLint configuration
-├── .prettierrc                 # Prettier format configuration
-├── electron-builder.yml        # Electron builder configuration
-├── electron.vite.config.ts     # Vite configuration for Electron
-├── package.json                # Project dependencies and scripts
-└── tsconfig.node.json          # Main process tsconfig
-└── tsconfig.web.json           # Renderer process tsconfig
+## License
 
-```
-<!-- prettier-ignore-end -->
+MIT
