@@ -31,6 +31,7 @@ const sesame = {
   saveConfig: (config: any) => ipcRenderer.invoke('vault:saveConfig', config),
   startApi: () => ipcRenderer.invoke('vault:startApi'),
   stopApi: () => ipcRenderer.invoke('vault:stopApi'),
+  captureScreen: () => ipcRenderer.invoke('vault:captureScreen'),
 }
 
 if (process.contextIsolated) {

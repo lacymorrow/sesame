@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, desktopCapturer, screen } from 'electron'
 import { VaultStore, getConfig, saveConfig } from '../core/store'
 import { deriveKey } from '../core/crypto'
 import { generateCode, getTimeRemaining } from '../core/totp'
@@ -108,6 +108,33 @@ export function registerIpcHandlers() {
   ipcMain.handle('vault:stopApi', async () => {
     await stopApiServer()
     return { success: true }
+  })
+
+  ipcMain.handle('vault:captureScreen', async () => {
+    try {
+      const primaryDisplay = screen.getPrimaryDisplay()
+      const { width, height } = primaryDisplay.size
+      const scaleFactor = primaryDisplay.scaleFactor
+
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: {
+          width: Math.round(width * scaleFactor),
+          height: Math.round(height * scaleFactor),
+        },
+      })
+
+      if (sources.length === 0) {
+        return { error: 'No screen sources available' }
+      }
+
+      // Return the primary screen as a PNG data URL
+      const thumbnail = sources[0].thumbnail
+      const dataUrl = thumbnail.toDataURL()
+      return { dataUrl, width, height, scaleFactor }
+    } catch (e: any) {
+      return { error: e.message }
+    }
   })
 }
 

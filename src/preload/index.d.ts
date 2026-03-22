@@ -20,6 +20,7 @@ interface SesameApi {
   saveConfig: (config: any) => Promise<{ success: boolean }>
   startApi: () => Promise<{ success?: boolean; error?: string }>
   stopApi: () => Promise<{ success: boolean }>
+  captureScreen: () => Promise<{ dataUrl?: string; width?: number; height?: number; scaleFactor?: number; error?: string }>
 }
 
 interface WindowApi {
