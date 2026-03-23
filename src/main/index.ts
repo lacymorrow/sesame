@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, session, shell } from 'electron'
 import path from 'node:path'
 import { registerIpcHandlers, cleanupStore } from './ipc'
 import { createTray, destroyTray } from './tray'
@@ -56,6 +56,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Set CSP via session headers (allows Vite dev scripts in dev, strict in prod)
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const isDev = !!process.env.ELECTRON_RENDERER_URL
+    const csp = isDev
+      ? "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws: http:; style-src 'self' 'unsafe-inline'; img-src 'self' data: res:;"
+      : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: res:;"
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    })
+  })
+
   registerIpcHandlers()
   createWindow()
 
