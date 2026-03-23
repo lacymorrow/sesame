@@ -1,4 +1,4 @@
-import { ipcMain, desktopCapturer, screen } from 'electron'
+import { ipcMain, desktopCapturer, screen, dialog, BrowserWindow } from 'electron'
 import { VaultStore, getConfig, saveConfig } from '../core/store'
 import { deriveKey } from '../core/crypto'
 import { generateCode, getTimeRemaining } from '../core/totp'
@@ -108,6 +108,65 @@ export function registerIpcHandlers() {
   ipcMain.handle('vault:stopApi', async () => {
     await stopApiServer()
     return { success: true }
+  })
+
+  ipcMain.handle('vault:exportVault', async () => {
+    if (!derivedKey) return { error: 'Vault is locked' }
+    try {
+      const win = BrowserWindow.getFocusedWindow()
+      if (!win) return { error: 'No focused window' }
+      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+        defaultPath: 'sesame-export.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+      if (canceled || !filePath) return { error: 'Cancelled' }
+
+      const s = await getStore()
+      const accounts = s.listAccounts()
+      const data = accounts.map((a) => ({
+        name: a.name,
+        issuer: a.issuer,
+        encrypted_secret: a.encrypted_secret,
+      }))
+      const fs = await import('node:fs')
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
+      return { path: filePath }
+    } catch (e: any) {
+      return { error: e.message }
+    }
+  })
+
+  ipcMain.handle('vault:importVault', async () => {
+    if (!derivedKey) return { error: 'Vault is locked' }
+    try {
+      const win = BrowserWindow.getFocusedWindow()
+      if (!win) return { error: 'No focused window' }
+      const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+        properties: ['openFile'],
+      })
+      if (canceled || !filePaths[0]) return { error: 'Cancelled' }
+
+      const fs = await import('node:fs')
+      const raw = fs.readFileSync(filePaths[0], 'utf8')
+      const data = JSON.parse(raw)
+      if (!Array.isArray(data)) return { error: 'Invalid import file' }
+
+      const s = await getStore()
+      let count = 0
+      for (const item of data) {
+        if (!item.name || !item.encrypted_secret) continue
+        try {
+          s.importAccountRaw(item.name, item.issuer || '', item.encrypted_secret)
+          count++
+        } catch {
+          // Skip duplicates
+        }
+      }
+      return { success: true, count }
+    } catch (e: any) {
+      return { error: e.message }
+    }
   })
 
   ipcMain.handle('vault:captureScreen', async () => {

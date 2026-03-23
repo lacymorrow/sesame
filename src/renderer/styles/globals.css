@@ -30,16 +30,31 @@ body {
 input,
 button,
 textarea,
-select {
+select,
+a {
   -webkit-app-region: no-drag;
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
   @apply bg-transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-700 rounded-full;
+  @apply bg-zinc-800 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-700;
+}
+
+/* Selection */
+::selection {
+  @apply bg-emerald-600/30 text-emerald-100;
+}
+
+/* Focus ring */
+:focus-visible {
+  @apply outline-none ring-1 ring-emerald-600/40 ring-offset-1 ring-offset-zinc-950;
 }

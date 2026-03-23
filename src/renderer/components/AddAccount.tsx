@@ -1,4 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react'
+import { motion } from 'framer-motion'
+import { Camera, Clipboard, FileImage, QrCode, PenLine, Link } from 'lucide-react'
+import { useToast } from './Toast'
 import jsQR from 'jsqr'
 
 interface AddAccountProps {
@@ -33,21 +36,26 @@ export function AddAccount({ onAdded }: AddAccountProps) {
   const [scanStatus, setScanStatus] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { toast } = useToast()
 
-  const handleQrResult = useCallback((data: string) => {
-    try {
-      const parsed = parseOtpauthUri(data)
-      setName(parsed.name)
-      setIssuer(parsed.issuer)
-      setSecret(parsed.secret)
-      setMode('manual')
-      setScanStatus('')
-      setError('')
-    } catch {
-      setError('QR code found but not a valid otpauth:// URI')
-      setScanStatus('')
-    }
-  }, [])
+  const handleQrResult = useCallback(
+    (data: string) => {
+      try {
+        const parsed = parseOtpauthUri(data)
+        setName(parsed.name)
+        setIssuer(parsed.issuer)
+        setSecret(parsed.secret)
+        setMode('manual')
+        setScanStatus('')
+        setError('')
+        toast('QR code scanned', 'success')
+      } catch {
+        setError('QR code found but not a valid otpauth:// URI')
+        setScanStatus('')
+      }
+    },
+    [toast]
+  )
 
   const processImage = useCallback(
     (img: HTMLImageElement) => {
@@ -85,7 +93,6 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     [processImage]
   )
 
-  // Screen capture
   const handleScreenCapture = useCallback(async () => {
     setScanStatus('Capturing screen...')
     setError('')
@@ -99,7 +106,6 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     processDataUrl(result.dataUrl)
   }, [processDataUrl])
 
-  // Clipboard paste
   const handlePaste = useCallback(
     async (e?: React.ClipboardEvent) => {
       setScanStatus('Reading clipboard...')
@@ -109,7 +115,6 @@ export function AddAccount({ onAdded }: AddAccountProps) {
       if (e) {
         items = e.clipboardData?.items
       } else {
-        // Programmatic read via clipboard API
         try {
           const clipItems = await navigator.clipboard.read()
           for (const item of clipItems) {
@@ -122,7 +127,6 @@ export function AddAccount({ onAdded }: AddAccountProps) {
               return
             }
           }
-          // Try text (might be an otpauth URI)
           const text = await navigator.clipboard.readText()
           if (text.startsWith('otpauth://')) {
             handleQrResult(text)
@@ -173,7 +177,6 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     [handleQrResult, processDataUrl]
   )
 
-  // File drop
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -196,7 +199,6 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     [processDataUrl]
   )
 
-  // File picker
   const handleFilePick = useCallback(() => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -247,126 +249,146 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     if (result.error) {
       setError(result.error)
     } else {
+      toast('Account added')
       onAdded()
     }
   }
 
-  return (
-    <div className="max-w-sm mx-auto" onPaste={handlePaste}>
-      <h2 className="text-lg font-semibold mb-4">Add Account</h2>
+  const modes: { id: InputMode; label: string; icon: typeof QrCode }[] = [
+    { id: 'scan', label: 'Scan QR', icon: QrCode },
+    { id: 'manual', label: 'Manual', icon: PenLine },
+    { id: 'uri', label: 'URI', icon: Link },
+  ]
 
-      {/* Hidden canvas for QR decode */}
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="max-w-sm mx-auto"
+      onPaste={handlePaste}
+    >
       <canvas ref={canvasRef} className="hidden" />
 
-      <div className="flex gap-2 mb-4">
-        {(['scan', 'manual', 'uri'] as const).map((m) => (
+      <div className="flex gap-1 mb-5 p-1 bg-zinc-900/40 rounded-xl">
+        {modes.map(({ id, label, icon: Icon }) => (
           <button
-            key={m}
-            onClick={() => { setMode(m); setError(''); setScanStatus('') }}
-            className={`px-3 py-1 text-sm rounded transition-colors ${
-              mode === m ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800'
+            key={id}
+            onClick={() => {
+              setMode(id)
+              setError('')
+              setScanStatus('')
+            }}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg transition-all ${
+              mode === id
+                ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
-            {m === 'scan' ? 'Scan QR' : m === 'manual' ? 'Manual' : 'URI'}
+            <Icon size={13} />
+            {label}
           </button>
         ))}
       </div>
 
       {mode === 'scan' ? (
         <div className="space-y-3">
-          {/* Drop zone */}
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOver(true)
+            }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
               dragOver
-                ? 'border-emerald-500 bg-emerald-500/10'
-                : 'border-zinc-700 hover:border-zinc-500'
+                ? 'border-emerald-500/60 bg-emerald-500/5'
+                : 'border-zinc-800 hover:border-zinc-600'
             }`}
           >
-            <p className="text-zinc-400 text-sm mb-3">
-              Drop a QR code image here, or:
-            </p>
+            <QrCode size={32} className="mx-auto mb-3 text-zinc-600" />
+            <p className="text-zinc-400 text-sm mb-4">Drop a QR code image here</p>
             <div className="flex gap-2 justify-center flex-wrap">
-              <button
-                onClick={handleScreenCapture}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm rounded transition-colors"
-              >
-                📸 Capture Screen
-              </button>
-              <button
-                onClick={() => handlePaste()}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm rounded transition-colors"
-              >
-                📋 Paste from Clipboard
-              </button>
-              <button
-                onClick={handleFilePick}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm rounded transition-colors"
-              >
-                📁 Choose File
-              </button>
+              <ScanButton icon={Camera} label="Screen" onClick={handleScreenCapture} />
+              <ScanButton icon={Clipboard} label="Clipboard" onClick={() => handlePaste()} />
+              <ScanButton icon={FileImage} label="File" onClick={handleFilePick} />
             </div>
           </div>
 
           {scanStatus && (
-            <p className="text-zinc-400 text-sm text-center">{scanStatus}</p>
+            <p className="text-zinc-400 text-xs text-center animate-pulse">{scanStatus}</p>
           )}
-
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-
-          <p className="text-zinc-500 text-xs text-center">
-            Tip: Take a screenshot of the QR code, then paste it here (Cmd+V / Ctrl+V)
+          {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+          <p className="text-zinc-600 text-xs text-center">
+            Tip: screenshot the QR code, then paste here
           </p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
           {mode === 'manual' ? (
             <>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Account name"
-                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500"
-              />
-              <input
-                type="text"
-                value={issuer}
-                onChange={(e) => setIssuer(e.target.value)}
-                placeholder="Issuer (optional)"
-                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500"
-              />
-              <input
-                type="text"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                placeholder="Secret key"
-                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500"
-              />
+              <Input value={name} onChange={setName} placeholder="Account name" autoFocus />
+              <Input value={issuer} onChange={setIssuer} placeholder="Issuer (optional)" />
+              <Input value={secret} onChange={setSecret} placeholder="Secret key" />
             </>
           ) : (
-            <input
-              type="text"
-              value={uri}
-              onChange={(e) => setUri(e.target.value)}
-              placeholder="otpauth://totp/..."
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500"
-            />
+            <Input value={uri} onChange={setUri} placeholder="otpauth://totp/..." autoFocus />
           )}
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && <p className="text-red-400 text-xs">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 rounded-xl text-sm font-medium transition-colors"
           >
             {loading ? 'Adding...' : 'Add Account'}
           </button>
         </form>
       )}
-    </div>
+    </motion.div>
+  )
+}
+
+function Input({
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  autoFocus?: boolean
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      className="w-full px-3.5 py-2.5 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+    />
+  )
+}
+
+function ScanButton({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: typeof Camera
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 text-xs rounded-lg transition-colors"
+    >
+      <Icon size={13} />
+      {label}
+    </button>
   )
 }
