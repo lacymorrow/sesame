@@ -128,8 +128,8 @@ export function registerIpcHandlers() {
         issuer: a.issuer,
         encrypted_secret: a.encrypted_secret,
       }))
-      const fs = await import('node:fs')
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
+      const fs = await import('node:fs/promises')
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2))
       return { path: filePath }
     } catch (e: any) {
       return { error: e.message }
@@ -147,8 +147,8 @@ export function registerIpcHandlers() {
       })
       if (canceled || !filePaths[0]) return { error: 'Cancelled' }
 
-      const fs = await import('node:fs')
-      const raw = fs.readFileSync(filePaths[0], 'utf8')
+      const fs = await import('node:fs/promises')
+      const raw = await fs.readFile(filePaths[0], 'utf8')
       const data = JSON.parse(raw)
       if (!Array.isArray(data)) return { error: 'Invalid import file' }
 
