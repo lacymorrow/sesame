@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Server, Download, Upload, Clock, Eye, EyeOff } from 'lucide-react'
+import { Server, Download, Upload, Clock, Eye, EyeOff, Check } from 'lucide-react'
 import { useToast } from './Toast'
 
 export function Settings() {
@@ -8,7 +8,9 @@ export function Settings() {
   const [apiRunning, setApiRunning] = useState(false)
   const [autoLockMinutes, setAutoLockMinutes] = useState('5')
   const [showCodes, setShowCodes] = useState(true)
+  const [savedField, setSavedField] = useState<string | null>(null)
   const { toast } = useToast()
+  const portDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     window.sesame.getConfig().then((config: any) => {
@@ -18,13 +20,39 @@ export function Settings() {
     })
   }, [])
 
-  const handleSaveConfig = async () => {
+  const saveConfig = useCallback(async (overrides: Record<string, unknown> = {}) => {
     const config = await window.sesame.getConfig()
-    config.port = parseInt(port, 10)
-    config.autoLockMinutes = parseInt(autoLockMinutes, 10)
-    config.showCodes = showCodes
+    config.port = parseInt(overrides.port as string ?? port, 10)
+    config.autoLockMinutes = parseInt(overrides.autoLockMinutes as string ?? autoLockMinutes, 10)
+    config.showCodes = overrides.showCodes !== undefined ? overrides.showCodes : showCodes
     await window.sesame.saveConfig(config)
-    toast('Settings saved')
+  }, [port, autoLockMinutes, showCodes])
+
+  const flashSaved = (field: string) => {
+    setSavedField(field)
+    setTimeout(() => setSavedField(null), 1500)
+  }
+
+  const handlePortChange = (value: string) => {
+    setPort(value)
+    if (portDebounceRef.current) clearTimeout(portDebounceRef.current)
+    portDebounceRef.current = setTimeout(async () => {
+      await saveConfig({ port: value })
+      flashSaved('port')
+    }, 500)
+  }
+
+  const handleAutoLockChange = async (value: string) => {
+    setAutoLockMinutes(value)
+    await saveConfig({ autoLockMinutes: value })
+    flashSaved('autoLock')
+  }
+
+  const handleShowCodesToggle = async () => {
+    const next = !showCodes
+    setShowCodes(next)
+    await saveConfig({ showCodes: next })
+    flashSaved('showCodes')
   }
 
   const handleToggleApi = async () => {
@@ -97,31 +125,36 @@ export function Settings() {
           <input
             type="number"
             value={port}
-            onChange={(e) => setPort(e.target.value)}
+            onChange={(e) => handlePortChange(e.target.value)}
             className="w-20 px-2 py-1 bg-zinc-900/60 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500 transition-colors"
           />
+          <SavedCheck visible={savedField === 'port'} />
         </div>
       </Section>
 
       {/* Display */}
       <Section title="Display" icon={showCodes ? Eye : EyeOff}>
-        <button
-          onClick={() => setShowCodes(!showCodes)}
-          className="flex items-center justify-between w-full text-sm text-zinc-300"
-        >
-          <span>Show TOTP codes</span>
-          <div
-            className={`w-9 h-5 rounded-full transition-colors flex items-center ${
-              showCodes ? 'bg-emerald-600' : 'bg-zinc-700'
-            }`}
-          >
-            <div
-              className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                showCodes ? 'translate-x-[18px]' : 'translate-x-[2px]'
+        <div className="flex items-center justify-between w-full">
+          <span className="text-sm text-zinc-300">Show TOTP codes</span>
+          <div className="flex items-center gap-2">
+            <SavedCheck visible={savedField === 'showCodes'} />
+            <button
+              role="switch"
+              aria-checked={showCodes}
+              aria-label="Show TOTP codes"
+              onClick={handleShowCodesToggle}
+              className={`w-9 h-5 rounded-full transition-colors flex items-center ${
+                showCodes ? 'bg-emerald-600' : 'bg-zinc-700'
               }`}
-            />
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  showCodes ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                }`}
+              />
+            </button>
           </div>
-        </button>
+        </div>
       </Section>
 
       {/* Auto-lock */}
@@ -130,7 +163,7 @@ export function Settings() {
           <label className="text-xs text-zinc-500">Auto-lock after</label>
           <select
             value={autoLockMinutes}
-            onChange={(e) => setAutoLockMinutes(e.target.value)}
+            onChange={(e) => handleAutoLockChange(e.target.value)}
             className="px-2 py-1 bg-zinc-900/60 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500 transition-colors"
           >
             <option value="1">1 min</option>
@@ -139,6 +172,7 @@ export function Settings() {
             <option value="30">30 min</option>
             <option value="0">Never</option>
           </select>
+          <SavedCheck visible={savedField === 'autoLock'} />
         </div>
       </Section>
 
@@ -161,15 +195,20 @@ export function Settings() {
           </button>
         </div>
       </Section>
-
-      {/* Save */}
-      <button
-        onClick={handleSaveConfig}
-        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium transition-colors"
-      >
-        Save Settings
-      </button>
     </motion.div>
+  )
+}
+
+function SavedCheck({ visible }: { visible: boolean }) {
+  return (
+    <motion.span
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: visible ? 1 : 0, scale: visible ? 1 : 0.8 }}
+      transition={{ duration: 0.15 }}
+      className="text-emerald-400"
+    >
+      <Check size={13} />
+    </motion.span>
   )
 }
 

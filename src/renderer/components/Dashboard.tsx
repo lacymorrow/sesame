@@ -67,15 +67,29 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   // Flat list for keyboard nav
   const flatList = sortedGroups.flatMap(([, accs]) => accs)
 
-  // Keyboard navigation
+  // Keyboard navigation with scrollIntoView
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSelectedIndex((i) => Math.min(i + 1, flatList.length - 1))
+        setSelectedIndex((i) => {
+          const next = Math.min(i + 1, flatList.length - 1)
+          requestAnimationFrame(() => {
+            const el = listRef.current?.querySelector(`[data-flat-index="${next}"]`)
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+          })
+          return next
+        })
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        setSelectedIndex((i) => Math.max(i - 1, 0))
+        setSelectedIndex((i) => {
+          const next = Math.max(i - 1, 0)
+          requestAnimationFrame(() => {
+            const el = listRef.current?.querySelector(`[data-flat-index="${next}"]`)
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+          })
+          return next
+        })
       } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < flatList.length) {
         e.preventDefault()
         const account = flatList[selectedIndex]
@@ -117,10 +131,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   let globalIdx = 0
 
   return (
-    <div className="space-y-3" ref={listRef}>
-      {accounts.length > 3 && (
-        <SearchBar value={search} onChange={setSearch} />
-      )}
+    <div className="space-y-3" ref={listRef} id="account-list">
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        resultCount={search ? filtered.length : undefined}
+        totalCount={search ? accounts.length : undefined}
+      />
 
       {filtered.length === 0 && search && (
         <div className="text-center py-8 text-zinc-500 text-sm">
@@ -140,12 +157,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               {accs.map((account) => {
                 const idx = globalIdx++
                 return (
-                  <AccountCard
-                    key={account.name}
-                    account={account}
-                    onRemove={() => handleRemove(account.name)}
-                    selected={idx === selectedIndex}
-                  />
+                  <div key={account.name} data-flat-index={idx}>
+                    <AccountCard
+                      account={account}
+                      onRemove={() => handleRemove(account.name)}
+                      selected={idx === selectedIndex}
+                    />
+                  </div>
                 )
               })}
             </AnimatePresence>

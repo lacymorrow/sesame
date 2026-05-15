@@ -10,6 +10,7 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [shakeKey, setShakeKey] = useState(0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,6 +25,7 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
       onUnlock()
     } else {
       setError(result.error || 'Failed to unlock vault')
+      setShakeKey((k) => k + 1)
     }
   }
 
@@ -62,9 +64,10 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
       </motion.p>
 
       <motion.form
-        initial={{ y: 15, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.4, duration: 0.3 }}
+        key={shakeKey}
+        initial={shakeKey > 0 ? { x: 0 } : { y: 15, opacity: 0 }}
+        animate={shakeKey > 0 ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { y: 0, opacity: 1 }}
+        transition={shakeKey > 0 ? { duration: 0.4, ease: 'easeInOut' } : { delay: 0.4, duration: 0.3 }}
         onSubmit={handleSubmit}
         className="w-full max-w-xs space-y-4"
       >

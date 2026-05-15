@@ -64,7 +64,7 @@ function SesameApp() {
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/60">
         <h1 className="text-sm font-semibold tracking-tight text-zinc-400">Sesame</h1>
-        <div className="flex items-center gap-0.5">
+        <nav aria-label="Main navigation" className="flex items-center gap-0.5">
           {navItems.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -83,10 +83,11 @@ function SesameApp() {
             onClick={handleLock}
             className="ml-1.5 p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
             title="Lock vault (Cmd+L)"
+            aria-label="Lock vault"
           >
             <Lock size={13} />
           </button>
-        </div>
+        </nav>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4">

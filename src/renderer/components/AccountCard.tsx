@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Copy, Trash2, Check } from 'lucide-react'
 import { IssuerIcon } from './IssuerIcon'
 import { CountdownRing } from './CountdownRing'
@@ -21,7 +21,19 @@ interface AccountCardProps {
 export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [justCopied, setJustCopied] = useState(false)
+  const [flashing, setFlashing] = useState(false)
+  const prevCodeRef = useRef(account.code)
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (prevCodeRef.current !== account.code && account.code !== null) {
+      setFlashing(true)
+      const t = setTimeout(() => setFlashing(false), 200)
+      prevCodeRef.current = account.code
+      return () => clearTimeout(t)
+    }
+    prevCodeRef.current = account.code
+  }, [account.code])
 
   const handleCopy = async () => {
     if (!account.code) return
@@ -43,6 +55,10 @@ export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ duration: 0.2 }}
       onClick={handleCopy}
+      role="button"
+      aria-label={`${account.issuer || account.name} TOTP code: ${formattedCode}. Click to copy.`}
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCopy() } }}
       className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer group transition-colors ${
         selected
           ? 'bg-zinc-800/80 border-zinc-600'
@@ -61,9 +77,13 @@ export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
           <span className="text-xs text-zinc-500 truncate">{account.name}</span>
         </div>
         <div className="flex items-center gap-3 mt-0.5">
-          <span className="text-[22px] font-mono font-bold tracking-[0.2em] text-zinc-100">
+          <motion.span
+            className="text-[24px] font-mono font-bold tracking-[0.25em] text-zinc-50"
+            animate={{ opacity: flashing ? 0.5 : 1 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
             {formattedCode}
-          </span>
+          </motion.span>
         </div>
       </div>
 
