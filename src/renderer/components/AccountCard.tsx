@@ -16,9 +16,11 @@ interface AccountCardProps {
   account: AccountData
   onRemove: () => void
   selected?: boolean
+  agentBadge?: boolean
+  agentPulse?: boolean
 }
 
-export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
+export function AccountCard({ account, onRemove, selected, agentBadge, agentPulse }: AccountCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [justCopied, setJustCopied] = useState(false)
   const [flashing, setFlashing] = useState(false)
@@ -35,12 +37,16 @@ export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
     prevCodeRef.current = account.code
   }, [account.code])
 
+  const [copyFlash, setCopyFlash] = useState(false)
+
   const handleCopy = async () => {
     if (!account.code) return
     await navigator.clipboard.writeText(account.code)
     setJustCopied(true)
+    setCopyFlash(true)
     toast('Copied to clipboard')
     setTimeout(() => setJustCopied(false), 1500)
+    setTimeout(() => setCopyFlash(false), 200)
   }
 
   const formattedCode = account.code
@@ -51,18 +57,24 @@ export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
     <motion.div
       layout
       initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={agentPulse
+        ? { opacity: 1, y: 0, borderColor: ['rgba(167,139,250,0.2)', 'rgba(167,139,250,0.4)', 'rgba(167,139,250,0.2)'] }
+        : { opacity: 1, y: 0 }
+      }
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
-      transition={{ duration: 0.2 }}
+      transition={agentPulse ? { duration: 1, ease: 'easeInOut' } : { duration: 0.2 }}
       onClick={handleCopy}
       role="button"
       aria-label={`${account.issuer || account.name} TOTP code: ${formattedCode}. Click to copy.`}
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCopy() } }}
-      className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer group transition-colors ${
-        selected
-          ? 'bg-zinc-800/80 border-zinc-600'
-          : 'bg-zinc-900/50 border-zinc-800/60 hover:bg-zinc-800/40 hover:border-zinc-700'
+      style={copyFlash ? { backgroundColor: 'rgba(5, 150, 105, 0.1)' } : undefined}
+      className={`relative flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer group transition-all duration-150 ease-out ${
+        agentPulse
+          ? 'bg-zinc-900/50 border-violet-400/20 shadow-[0_0_12px_rgba(167,139,250,0.15)]'
+          : selected
+            ? 'bg-zinc-800/80 border-zinc-600 shadow-[0_4px_12px_rgba(0,0,0,0.4)]'
+            : 'bg-zinc-900/50 border-zinc-800/60 hover:bg-zinc-800/40 hover:border-zinc-700 hover:shadow-[0_4px_12px_rgba(0,0,0,0.4)]'
       }`}
     >
       <IssuerIcon issuer={account.issuer} name={account.name} />
@@ -75,6 +87,11 @@ export function AccountCard({ account, onRemove, selected }: AccountCardProps) {
             </span>
           )}
           <span className="text-xs text-zinc-500 truncate">{account.name}</span>
+          {agentBadge && (
+            <span className="px-1 py-0.5 text-[10px] font-medium bg-violet-400/15 text-violet-400 rounded">
+              Agent
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-0.5">
           <motion.span

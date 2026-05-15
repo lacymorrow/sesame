@@ -9,6 +9,14 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+export type CodeAccessCallback = (account: string, requester: string) => void
+
+let onCodeAccessedCallback: CodeAccessCallback | null = null
+
+export function setCodeAccessCallback(cb: CodeAccessCallback | null) {
+  onCodeAccessedCallback = cb
+}
+
 export async function startApiServer(store: VaultStore, key: Buffer): Promise<FastifyInstance> {
   if (server) return server
 
@@ -47,6 +55,7 @@ export async function startApiServer(store: VaultStore, key: Buffer): Promise<Fa
       return
     }
     store.logAccess(account, 'api')
+    onCodeAccessedCallback?.(account, 'api')
     const code = generateCode(secret)
     const remaining = getTimeRemaining()
     return { code, remaining }

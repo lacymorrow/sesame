@@ -16,10 +16,14 @@ interface DashboardProps {
   onNavigate?: (view: string) => void
 }
 
+const AGENT_ACCESS_TTL = 5 * 60 * 1000
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const [accounts, setAccounts] = useState<AccountData[]>([])
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [agentAccessed, setAgentAccessed] = useState<Map<string, number>>(new Map())
+  const [agentPulse, setAgentPulse] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
@@ -34,6 +38,30 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     const interval = setInterval(refresh, 1000)
     return () => clearInterval(interval)
   }, [refresh])
+
+  useEffect(() => {
+    const cleanup = window.sesame.onCodeAccessed((data) => {
+      const now = Date.now()
+      setAgentAccessed((prev) => new Map(prev).set(data.account, now))
+      setAgentPulse(data.account)
+      setTimeout(() => setAgentPulse(null), 1000)
+    })
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAgentAccessed((prev) => {
+        const now = Date.now()
+        const next = new Map<string, number>()
+        for (const [k, v] of prev) {
+          if (now - v < AGENT_ACCESS_TTL) next.set(k, v)
+        }
+        return next.size !== prev.size ? next : prev
+      })
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleRemove = async (name: string) => {
     await window.sesame.removeAccount(name)
@@ -162,6 +190,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                       account={account}
                       onRemove={() => handleRemove(account.name)}
                       selected={idx === selectedIndex}
+                      agentBadge={agentAccessed.has(account.name)}
+                      agentPulse={agentPulse === account.name}
                     />
                   </div>
                 )

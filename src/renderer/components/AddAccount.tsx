@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Camera, Clipboard, FileImage, QrCode, PenLine, Link } from 'lucide-react'
 import { useToast } from './Toast'
 import jsQR from 'jsqr'
@@ -9,6 +9,13 @@ interface AddAccountProps {
 }
 
 type InputMode = 'manual' | 'uri' | 'scan'
+
+const COMMON_ISSUERS = [
+  'GitHub', 'Google', 'AWS', 'Microsoft', 'Slack', 'Cloudflare',
+  'Vercel', 'Discord', 'Twitter', 'Stripe', 'DigitalOcean', 'npm',
+  'GitLab', 'Heroku', 'Dropbox', 'Facebook', 'Reddit', 'Twitch',
+  'LinkedIn', 'PyPI', 'Docker Hub', 'Bitwarden', 'Coinbase',
+]
 
 function parseOtpauthUri(uri: string) {
   const url = new URL(uri)
@@ -35,8 +42,70 @@ export function AddAccount({ onAdded }: AddAccountProps) {
   const [loading, setLoading] = useState(false)
   const [scanStatus, setScanStatus] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [previewCode, setPreviewCode] = useState<string | null>(null)
+  const [previewRemaining, setPreviewRemaining] = useState(0)
+  const [issuerOpen, setIssuerOpen] = useState(false)
+  const [issuerFilter, setIssuerFilter] = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const issuerRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+
+  // Auto-paste otpauth:// URI from clipboard on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const text = await navigator.clipboard.readText()
+        if (text.startsWith('otpauth://')) {
+          const parsed = parseOtpauthUri(text)
+          setName(parsed.name)
+          setIssuer(parsed.issuer)
+          setSecret(parsed.secret)
+          setMode('manual')
+          toast('Detected otpauth URI in clipboard', 'success')
+        }
+      } catch {
+        // Clipboard access denied — ignore
+      }
+    })()
+  }, [toast])
+
+  // Live TOTP preview while typing secret
+  useEffect(() => {
+    if (!secret || secret.length < 8) {
+      setPreviewCode(null)
+      return
+    }
+
+    let cancelled = false
+    const update = async () => {
+      const result = await window.sesame.previewCode(secret)
+      if (!cancelled && result.code) {
+        setPreviewCode(result.code)
+        setPreviewRemaining(result.remaining)
+      } else if (!cancelled) {
+        setPreviewCode(null)
+      }
+    }
+
+    update()
+    const interval = setInterval(update, 1000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [secret])
+
+  // Close issuer dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (issuerRef.current && !issuerRef.current.contains(e.target as Node)) {
+        setIssuerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filteredIssuers = COMMON_ISSUERS.filter((i) =>
+    i.toLowerCase().includes((issuerFilter || issuer).toLowerCase())
+  )
 
   const handleQrResult = useCallback(
     (data: string) => {
@@ -254,11 +323,26 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     }
   }
 
+  const handleIssuerInput = (value: string) => {
+    setIssuer(value)
+    setIssuerFilter(value)
+    setIssuerOpen(true)
+  }
+
+  const selectIssuer = (value: string) => {
+    setIssuer(value)
+    setIssuerOpen(false)
+  }
+
   const modes: { id: InputMode; label: string; icon: typeof QrCode }[] = [
     { id: 'scan', label: 'Scan QR', icon: QrCode },
     { id: 'manual', label: 'Manual', icon: PenLine },
     { id: 'uri', label: 'URI', icon: Link },
   ]
+
+  const formattedPreview = previewCode
+    ? `${previewCode.slice(0, 3)} ${previewCode.slice(3)}`
+    : null
 
   return (
     <motion.div
@@ -328,8 +412,62 @@ export function AddAccount({ onAdded }: AddAccountProps) {
           {mode === 'manual' ? (
             <>
               <Input value={name} onChange={setName} placeholder="Account name" autoFocus />
-              <Input value={issuer} onChange={setIssuer} placeholder="Issuer (optional)" />
+
+              {/* Issuer with autocomplete */}
+              <div className="relative" ref={issuerRef}>
+                <Input
+                  value={issuer}
+                  onChange={handleIssuerInput}
+                  placeholder="Issuer (optional)"
+                  onFocus={() => setIssuerOpen(true)}
+                />
+                <AnimatePresence>
+                  {issuerOpen && filteredIssuers.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute z-10 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg max-h-32 overflow-y-auto"
+                    >
+                      {filteredIssuers.slice(0, 8).map((i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => selectIssuer(i)}
+                          className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                        >
+                          {i}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               <Input value={secret} onChange={setSecret} placeholder="Secret key" />
+
+              {/* Live TOTP preview */}
+              <AnimatePresence>
+                {formattedPreview && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between p-3 bg-zinc-800/50 border border-zinc-700/60 rounded-xl">
+                      <div>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Preview</span>
+                        <div className="text-lg font-mono font-bold tracking-[0.2em] text-zinc-200">
+                          {formattedPreview}
+                        </div>
+                      </div>
+                      <div className="text-xs text-zinc-500 font-mono">{previewRemaining}s</div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           ) : (
             <Input value={uri} onChange={setUri} placeholder="otpauth://totp/..." autoFocus />
@@ -355,11 +493,13 @@ function Input({
   onChange,
   placeholder,
   autoFocus,
+  onFocus,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
   autoFocus?: boolean
+  onFocus?: () => void
 }) {
   return (
     <input
@@ -368,6 +508,7 @@ function Input({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       autoFocus={autoFocus}
+      onFocus={onFocus}
       className="w-full px-3.5 py-2.5 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
     />
   )

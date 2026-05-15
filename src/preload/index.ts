@@ -19,6 +19,7 @@ const api = {
 
 // Sesame vault API
 const sesame = {
+  vaultExists: () => ipcRenderer.invoke('vault:exists'),
   unlock: (password: string) => ipcRenderer.invoke('vault:unlock', password),
   lock: () => ipcRenderer.invoke('vault:lock'),
   isUnlocked: () => ipcRenderer.invoke('vault:isUnlocked'),
@@ -34,6 +35,13 @@ const sesame = {
   captureScreen: () => ipcRenderer.invoke('vault:captureScreen'),
   exportVault: () => ipcRenderer.invoke('vault:exportVault'),
   importVault: () => ipcRenderer.invoke('vault:importVault'),
+  previewCode: (secret: string) => ipcRenderer.invoke('vault:previewCode', secret),
+  getAuditLog: (limit?: number) => ipcRenderer.invoke('vault:getAuditLog', limit),
+  onCodeAccessed: (callback: (data: { account: string; requester: string; timestamp: string }) => void) => {
+    const handler = (_: any, data: any) => callback(data)
+    ipcRenderer.on('vault:onCodeAccessed', handler)
+    return () => ipcRenderer.removeListener('vault:onCodeAccessed', handler)
+  },
 }
 
 if (process.contextIsolated) {
