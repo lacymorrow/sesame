@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Camera, Clipboard, FileImage, QrCode, PenLine, Link } from 'lucide-react'
+import { Camera, Clipboard, FileImage, QrCode, PenLine, Link, Check } from 'lucide-react'
 import { useToast } from './Toast'
+import { IssuerIcon } from './IssuerIcon'
 import jsQR from 'jsqr'
 
 interface AddAccountProps {
-  onAdded: () => void
+  onAdded: (accountName?: string) => void
 }
 
 type InputMode = 'manual' | 'uri' | 'scan'
@@ -46,6 +47,7 @@ export function AddAccount({ onAdded }: AddAccountProps) {
   const [previewRemaining, setPreviewRemaining] = useState(0)
   const [issuerOpen, setIssuerOpen] = useState(false)
   const [issuerFilter, setIssuerFilter] = useState('')
+  const [addedAccount, setAddedAccount] = useState<{name: string, issuer: string, code: string | null} | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const issuerRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
@@ -318,8 +320,14 @@ export function AddAccount({ onAdded }: AddAccountProps) {
     if (result.error) {
       setError(result.error)
     } else {
+      const preview = await window.sesame.previewCode(accountSecret)
+      setAddedAccount({
+        name: accountName,
+        issuer: accountIssuer,
+        code: preview.code || null,
+      })
       toast('Account added')
-      onAdded()
+      setTimeout(() => onAdded(accountName), 1500)
     }
   }
 
@@ -343,6 +351,46 @@ export function AddAccount({ onAdded }: AddAccountProps) {
   const formattedPreview = previewCode
     ? `${previewCode.slice(0, 3)} ${previewCode.slice(3)}`
     : null
+
+  if (addedAccount) {
+    const formattedCode = addedAccount.code
+      ? `${addedAccount.code.slice(0, 3)} ${addedAccount.code.slice(3)}`
+      : '--- ---'
+
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <motion.div
+          layoutId={`account-${addedAccount.name}`}
+          className="w-full max-w-sm flex items-center gap-3 p-3.5 rounded-xl border border-emerald-700/30 bg-zinc-900/50 shadow-[0_0_24px_rgba(52,211,153,0.1)]"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        >
+          <IssuerIcon issuer={addedAccount.issuer} name={addedAccount.name} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              {addedAccount.issuer && (
+                <span className="text-xs font-medium text-zinc-400">{addedAccount.issuer}</span>
+              )}
+              <span className="text-xs text-zinc-500">{addedAccount.name}</span>
+            </div>
+            <div className="text-[24px] font-mono font-bold tracking-[0.25em] text-zinc-50 mt-0.5">
+              {formattedCode}
+            </div>
+          </div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.3 }}
+          className="flex items-center gap-2 mt-4 text-emerald-400"
+        >
+          <Check size={16} />
+          <span className="text-sm font-medium">Account added</span>
+        </motion.div>
+      </div>
+    )
+  }
 
   return (
     <motion.div

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Copy, Trash2, Check } from 'lucide-react'
 import { IssuerIcon } from './IssuerIcon'
 import { CountdownRing } from './CountdownRing'
 import { useToast } from './Toast'
+import { useClipboardCopy } from '../hooks/useClipboardCopy'
 
 interface AccountData {
   name: string
@@ -18,9 +19,11 @@ interface AccountCardProps {
   selected?: boolean
   agentBadge?: boolean
   agentPulse?: boolean
+  highlighted?: boolean
 }
 
-export function AccountCard({ account, onRemove, selected, agentBadge, agentPulse }: AccountCardProps) {
+export function AccountCard({ account, onRemove, selected, agentBadge, agentPulse, highlighted }: AccountCardProps) {
+  const clipboardCopy = useClipboardCopy()
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [justCopied, setJustCopied] = useState(false)
   const [flashing, setFlashing] = useState(false)
@@ -41,7 +44,7 @@ export function AccountCard({ account, onRemove, selected, agentBadge, agentPuls
 
   const handleCopy = async () => {
     if (!account.code) return
-    await navigator.clipboard.writeText(account.code)
+    await clipboardCopy(account.code)
     setJustCopied(true)
     setCopyFlash(true)
     toast('Copied to clipboard')
@@ -56,6 +59,7 @@ export function AccountCard({ account, onRemove, selected, agentBadge, agentPuls
   return (
     <motion.div
       layout
+      layoutId={highlighted ? `account-${account.name}` : undefined}
       initial={{ opacity: 0, y: 8 }}
       animate={agentPulse
         ? { opacity: 1, y: 0, borderColor: ['rgba(167,139,250,0.2)', 'rgba(167,139,250,0.4)', 'rgba(167,139,250,0.2)'] }

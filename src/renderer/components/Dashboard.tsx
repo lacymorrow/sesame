@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Plus, KeyRound } from 'lucide-react'
 import { AccountCard } from './AccountCard'
 import { SearchBar } from './SearchBar'
+import { useClipboardCopy } from '../hooks/useClipboardCopy'
 
 interface AccountData {
   name: string
@@ -14,11 +15,13 @@ interface AccountData {
 
 interface DashboardProps {
   onNavigate?: (view: string) => void
+  highlightAccount?: string | null
 }
 
 const AGENT_ACCESS_TTL = 5 * 60 * 1000
 
-export function Dashboard({ onNavigate }: DashboardProps) {
+export function Dashboard({ onNavigate, highlightAccount }: DashboardProps) {
+  const clipboardCopy = useClipboardCopy()
   const [accounts, setAccounts] = useState<AccountData[]>([])
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -122,13 +125,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         e.preventDefault()
         const account = flatList[selectedIndex]
         if (account.code) {
-          navigator.clipboard.writeText(account.code)
+          clipboardCopy(account.code)
         }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [flatList, selectedIndex])
+  }, [flatList, selectedIndex, clipboardCopy])
 
   // Reset selection when search changes
   useEffect(() => {
@@ -192,6 +195,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                       selected={idx === selectedIndex}
                       agentBadge={agentAccessed.has(account.name)}
                       agentPulse={agentPulse === account.name}
+                      highlighted={highlightAccount === account.name}
                     />
                   </div>
                 )

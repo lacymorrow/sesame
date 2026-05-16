@@ -35,6 +35,7 @@ export function Settings() {
   const [testResult, setTestResult] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
   const [lastApiRequest, setLastApiRequest] = useState<string | null>(null)
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [clipboardClearSeconds, setClipboardClearSeconds] = useState('0')
   const { toast } = useToast()
   const portDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -43,6 +44,7 @@ export function Settings() {
       setPort(String(config.port || 7327))
       if (config.autoLockMinutes) setAutoLockMinutes(String(config.autoLockMinutes))
       if (config.showCodes !== undefined) setShowCodes(config.showCodes)
+      if (config.clipboardClearSeconds !== undefined) setClipboardClearSeconds(String(config.clipboardClearSeconds))
     })
   }, [])
 
@@ -61,8 +63,9 @@ export function Settings() {
     config.port = parseInt(overrides.port as string ?? port, 10)
     config.autoLockMinutes = parseInt(overrides.autoLockMinutes as string ?? autoLockMinutes, 10)
     config.showCodes = overrides.showCodes !== undefined ? overrides.showCodes : showCodes
+    config.clipboardClearSeconds = parseInt(overrides.clipboardClearSeconds as string ?? clipboardClearSeconds, 10)
     await window.sesame.saveConfig(config)
-  }, [port, autoLockMinutes, showCodes])
+  }, [port, autoLockMinutes, showCodes, clipboardClearSeconds])
 
   const flashSaved = (field: string) => {
     setSavedField(field)
@@ -89,6 +92,12 @@ export function Settings() {
     setShowCodes(next)
     await saveConfig({ showCodes: next })
     flashSaved('showCodes')
+  }
+
+  const handleClipboardClearChange = async (value: string) => {
+    setClipboardClearSeconds(value)
+    await saveConfig({ clipboardClearSeconds: value })
+    flashSaved('clipboardClear')
   }
 
   const handleToggleApi = async () => {
@@ -165,7 +174,7 @@ export function Settings() {
       transition={{ duration: 0.2 }}
       className="max-w-sm mx-auto space-y-6"
     >
-      {/* API Server — redesigned */}
+      {/* API Server */}
       <Section title="API Server" icon={Server}>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
@@ -247,6 +256,21 @@ export function Settings() {
             </select>
             <SavedCheck visible={savedField === 'autoLock'} />
           </div>
+          <div className="flex items-center gap-2">
+            <Copy size={13} className="text-zinc-500" />
+            <label className="text-xs text-zinc-500">Clear clipboard after</label>
+            <select
+              value={clipboardClearSeconds}
+              onChange={(e) => handleClipboardClearChange(e.target.value)}
+              className="px-2 py-1 bg-zinc-900/60 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-zinc-500 transition-colors"
+            >
+              <option value="10">10 sec</option>
+              <option value="30">30 sec</option>
+              <option value="60">1 min</option>
+              <option value="0">Never</option>
+            </select>
+            <SavedCheck visible={savedField === 'clipboardClear'} />
+          </div>
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2">
               {showCodes ? <Eye size={13} className="text-zinc-500" /> : <EyeOff size={13} className="text-zinc-500" />}
@@ -274,7 +298,7 @@ export function Settings() {
         </div>
       </Section>
 
-      {/* Audit Log — NEW */}
+      {/* Audit Log */}
       <Section title="Access Log" icon={FileText}>
         {auditLog.length === 0 ? (
           <p className="text-xs text-zinc-500">No access events recorded yet.</p>
@@ -329,6 +353,10 @@ export function Settings() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-zinc-300">Version</span>
             <span className="text-sm text-zinc-500 font-mono">{VERSION}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">License</span>
+            <span className="text-sm text-zinc-500">MIT</span>
           </div>
           <a
             href={GITHUB_URL}

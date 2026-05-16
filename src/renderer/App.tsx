@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { WindowContextProvider } from '@/app/components/window/WindowContext'
 import { menuItems } from '@/lib/window'
 import { KeyRound, Plus, Settings as SettingsIcon, Lock } from 'lucide-react'
@@ -20,6 +20,7 @@ const viewVariants = {
 function SesameApp() {
   const [unlocked, setUnlocked] = useState(false)
   const [view, setView] = useState<View>('dashboard')
+  const [newlyAdded, setNewlyAdded] = useState<string | null>(null)
 
   useEffect(() => {
     window.sesame.isUnlocked().then((res: any) => {
@@ -75,6 +76,12 @@ function SesameApp() {
     setView('dashboard')
   }
 
+  const handleAccountAdded = (name?: string) => {
+    if (name) setNewlyAdded(name)
+    setView('dashboard')
+    if (name) setTimeout(() => setNewlyAdded(null), 2000)
+  }
+
   if (!unlocked) {
     return <UnlockScreen onUnlock={handleUnlock} />
   }
@@ -120,21 +127,23 @@ function SesameApp() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-4">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={view}
-            variants={viewVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ duration: 0.15 }}
-            className="h-full"
-          >
-            {view === 'dashboard' && <Dashboard onNavigate={(v) => setView(v as View)} />}
-            {view === 'add' && <AddAccount onAdded={() => setView('dashboard')} />}
-            {view === 'settings' && <Settings />}
-          </motion.div>
-        </AnimatePresence>
+        <LayoutGroup>
+          <AnimatePresence mode="popLayout">
+            <motion.div
+              key={view}
+              variants={viewVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: 0.15 }}
+              className="h-full"
+            >
+              {view === 'dashboard' && <Dashboard onNavigate={(v) => setView(v as View)} highlightAccount={newlyAdded} />}
+              {view === 'add' && <AddAccount onAdded={handleAccountAdded} />}
+              {view === 'settings' && <Settings />}
+            </motion.div>
+          </AnimatePresence>
+        </LayoutGroup>
       </main>
     </div>
   )
