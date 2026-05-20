@@ -11,3 +11,4 @@ out/
 .env
 .env.local
 sesame-data/
+*.tsbuildinfo
