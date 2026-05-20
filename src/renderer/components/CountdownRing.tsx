@@ -20,7 +20,13 @@ export function CountdownRing({ remaining, total = 30, size = 32 }: CountdownRin
         : 'text-emerald-400'
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div
+      className="relative"
+      style={{ width: size, height: size }}
+      role="timer"
+      aria-live="polite"
+      aria-label={`${remaining} seconds remaining`}
+    >
       <svg
         className="-rotate-90"
         width={size}

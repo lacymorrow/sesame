@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Plus, KeyRound } from 'lucide-react'
 import { AccountCard } from './AccountCard'
 import { SearchBar } from './SearchBar'
+import { useClipboardCopy } from '../hooks/useClipboardCopy'
 
 interface AccountData {
   name: string
@@ -14,12 +15,18 @@ interface AccountData {
 
 interface DashboardProps {
   onNavigate?: (view: string) => void
+  highlightAccount?: string | null
 }
 
-export function Dashboard({ onNavigate }: DashboardProps) {
+const AGENT_ACCESS_TTL = 5 * 60 * 1000
+
+export function Dashboard({ onNavigate, highlightAccount }: DashboardProps) {
+  const clipboardCopy = useClipboardCopy()
   const [accounts, setAccounts] = useState<AccountData[]>([])
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [agentAccessed, setAgentAccessed] = useState<Map<string, number>>(new Map())
+  const [agentPulse, setAgentPulse] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
@@ -34,6 +41,30 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     const interval = setInterval(refresh, 1000)
     return () => clearInterval(interval)
   }, [refresh])
+
+  useEffect(() => {
+    const cleanup = window.sesame.onCodeAccessed((data) => {
+      const now = Date.now()
+      setAgentAccessed((prev) => new Map(prev).set(data.account, now))
+      setAgentPulse(data.account)
+      setTimeout(() => setAgentPulse(null), 1000)
+    })
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAgentAccessed((prev) => {
+        const now = Date.now()
+        const next = new Map<string, number>()
+        for (const [k, v] of prev) {
+          if (now - v < AGENT_ACCESS_TTL) next.set(k, v)
+        }
+        return next.size !== prev.size ? next : prev
+      })
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleRemove = async (name: string) => {
     await window.sesame.removeAccount(name)
@@ -67,26 +98,40 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   // Flat list for keyboard nav
   const flatList = sortedGroups.flatMap(([, accs]) => accs)
 
-  // Keyboard navigation
+  // Keyboard navigation with scrollIntoView
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSelectedIndex((i) => Math.min(i + 1, flatList.length - 1))
+        setSelectedIndex((i) => {
+          const next = Math.min(i + 1, flatList.length - 1)
+          requestAnimationFrame(() => {
+            const el = listRef.current?.querySelector(`[data-flat-index="${next}"]`)
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+          })
+          return next
+        })
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        setSelectedIndex((i) => Math.max(i - 1, 0))
+        setSelectedIndex((i) => {
+          const next = Math.max(i - 1, 0)
+          requestAnimationFrame(() => {
+            const el = listRef.current?.querySelector(`[data-flat-index="${next}"]`)
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+          })
+          return next
+        })
       } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < flatList.length) {
         e.preventDefault()
         const account = flatList[selectedIndex]
         if (account.code) {
-          navigator.clipboard.writeText(account.code)
+          clipboardCopy(account.code)
         }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [flatList, selectedIndex])
+  }, [flatList, selectedIndex, clipboardCopy])
 
   // Reset selection when search changes
   useEffect(() => {
@@ -117,10 +162,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   let globalIdx = 0
 
   return (
-    <div className="space-y-3" ref={listRef}>
-      {accounts.length > 3 && (
-        <SearchBar value={search} onChange={setSearch} />
-      )}
+    <div className="space-y-3" ref={listRef} id="account-list">
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        resultCount={search ? filtered.length : undefined}
+        totalCount={search ? accounts.length : undefined}
+      />
 
       {filtered.length === 0 && search && (
         <div className="text-center py-8 text-zinc-500 text-sm">
@@ -140,12 +188,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               {accs.map((account) => {
                 const idx = globalIdx++
                 return (
-                  <AccountCard
-                    key={account.name}
-                    account={account}
-                    onRemove={() => handleRemove(account.name)}
-                    selected={idx === selectedIndex}
-                  />
+                  <div key={account.name} data-flat-index={idx}>
+                    <AccountCard
+                      account={account}
+                      onRemove={() => handleRemove(account.name)}
+                      selected={idx === selectedIndex}
+                      agentBadge={agentAccessed.has(account.name)}
+                      agentPulse={agentPulse === account.name}
+                      highlighted={highlightAccount === account.name}
+                    />
+                  </div>
                 )
               })}
             </AnimatePresence>

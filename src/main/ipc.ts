@@ -1,8 +1,14 @@
 import { ipcMain, desktopCapturer, screen, dialog, BrowserWindow } from 'electron'
+import path from 'node:path'
+import os from 'node:os'
+import fs from 'node:fs'
 import { VaultStore, getConfig, saveConfig } from '../core/store'
 import { deriveKey } from '../core/crypto'
 import { generateCode, getTimeRemaining } from '../core/totp'
-import { startApiServer, stopApiServer } from '../core/api'
+import { startApiServer, stopApiServer, setCodeAccessCallback } from '../core/api'
+
+const SESAME_DIR = path.join(os.homedir(), '.sesame')
+const DB_PATH = path.join(SESAME_DIR, 'vault.db')
 
 let store: VaultStore | null = null
 let derivedKey: Buffer | null = null
@@ -18,6 +24,10 @@ async function getStore(): Promise<VaultStore> {
 }
 
 export function registerIpcHandlers() {
+  ipcMain.handle('vault:exists', async () => {
+    return { exists: fs.existsSync(DB_PATH) }
+  })
+
   ipcMain.handle('vault:unlock', async (_event, password: string) => {
     try {
       const config = getConfig()
@@ -98,6 +108,11 @@ export function registerIpcHandlers() {
     if (!derivedKey) return { error: 'Vault is locked' }
     try {
       const s = await getStore()
+      setCodeAccessCallback((account, requester) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send('vault:onCodeAccessed', { account, requester, timestamp: new Date().toISOString() })
+        }
+      })
       await startApiServer(s, derivedKey)
       return { success: true }
     } catch (e: any) {
@@ -106,8 +121,25 @@ export function registerIpcHandlers() {
   })
 
   ipcMain.handle('vault:stopApi', async () => {
+    setCodeAccessCallback(null)
     await stopApiServer()
     return { success: true }
+  })
+
+  ipcMain.handle('vault:previewCode', async (_event, secret: string) => {
+    try {
+      const code = generateCode(secret)
+      const remaining = getTimeRemaining()
+      return { code, remaining }
+    } catch {
+      return { code: null, remaining: 0 }
+    }
+  })
+
+  ipcMain.handle('vault:getAuditLog', async (_event, limit: number = 50) => {
+    if (!derivedKey) return { error: 'Vault is locked' }
+    const s = await getStore()
+    return s.getAuditLog(limit)
   })
 
   ipcMain.handle('vault:exportVault', async () => {

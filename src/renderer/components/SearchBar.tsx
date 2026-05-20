@@ -4,9 +4,11 @@ import { Search, X } from 'lucide-react'
 interface SearchBarProps {
   value: string
   onChange: (value: string) => void
+  resultCount?: number
+  totalCount?: number
 }
 
-export function SearchBar({ value, onChange }: SearchBarProps) {
+export function SearchBar({ value, onChange, resultCount, totalCount }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -24,6 +26,8 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
     return () => window.removeEventListener('keydown', handler)
   }, [onChange])
 
+  const showCount = value && resultCount !== undefined && totalCount !== undefined
+
   return (
     <div className="relative">
       <Search
@@ -32,12 +36,20 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
       />
       <input
         ref={inputRef}
+        role="searchbox"
+        aria-controls="account-list"
+        aria-label="Search accounts"
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search accounts..."
+        placeholder="Search accounts... Cmd+F"
         className="w-full pl-9 pr-8 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
       />
+      {showCount && (
+        <span className="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-zinc-500 pointer-events-none">
+          {resultCount}/{totalCount}
+        </span>
+      )}
       {value && (
         <button
           onClick={() => {
