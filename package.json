@@ -4,7 +4,7 @@
   "description": "Agent-readable authenticator. Desktop app + CLI + local API for TOTP codes.",
   "main": "./out/main/main.js",
   "bin": {
-    "sesame": "./dist/cli/index.js"
+    "sesame": "dist/cli/index.js"
   },
   "license": "MIT",
   "author": {
@@ -33,7 +33,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lacymorrow/sesame.git"
+    "url": "git+https://github.com/lacymorrow/sesame.git"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
